@@ -1,0 +1,16 @@
+language: go
+sudo: false
+go:
+  - 1.2
+  - 1.4
+  - 1.5
+
+before_install:
+  - pip install --user codecov
+
+script:
+  - ./go.test.sh
+
+after_success:
+  - codecov
+  - bash <(curl -s https://codecov.io/bash)
