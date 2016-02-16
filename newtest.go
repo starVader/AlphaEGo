@@ -37,15 +37,17 @@ func getwriter() (*csv.Writer, error) {
 }
 
 func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
-	var mutex = &sync.Mutex{}
+    var mutex = &sync.Mutex{}
 	for i := range m {
-		c = i
+        c = i
 		fmt.Println(c)
 		data := []string{c.User, c.Post_date, c.Message}
-		mutex.Lock() //Introduced locks for write to csv file
+		//Introduced locks for write to csv file
+		mutex.Lock() 
 		writer.Write(data)
 		writer.Flush()
 		mutex.Unlock()
+		//lock closed
 	}
 }
 
@@ -62,23 +64,26 @@ func filtering(search chan *elastic.SearchResult) {
 	for i := range search {
 		searchResult := i
 		for _, hit := range searchResult.Hits.Hits {
-			err := json.Unmarshal(*hit.Source, &t)
+	        err := json.Unmarshal(*hit.Source, &t)
 			if err != nil {
 				fmt.Println("failed", err)
 			}
-			filter := strings.Replace(q.search_string,q.search_string[:1], strings.ToUpper(q.search_string[:1]),1) // filtering according to searchstring
+			//converting the first letter to upper for matching to the result
+			filter := strings.Replace(q.search_string,q.search_string[:1], strings.ToUpper(q.search_string[:1]),1)
 			if t.User == filter {
 				data <- t // channeling data to csv writer
 			}
 		}
 	}
-	close(data)
+	close(data) // closing the channel
 }
 
 func getReport(client *elastic.Client) {
 	result := make(chan *elastic.SearchResult)
-	go filtering(result) // spawinng the filtering routine
-	termQuery := elastic.NewTermQuery(q.search_field, q.search_string)// the termquery uses all lower but for matching to filter exactly we have to convert the first letter to upper
+	// spawinng the filtering routine
+	go filtering(result) 
+	// the termquery uses all lower but for matching to filter exactly we have to convert the first letter to upper
+	termQuery := elastic.NewTermQuery(q.search_field, q.search_string)
 	count, err := client.Count().
 		Query(termQuery).
 		Do()
@@ -113,7 +118,7 @@ func getReport(client *elastic.Client) {
 	if pages <= 0 {
 		fmt.Println(pages, "Records found")
 	}
-	close(data)
+	close(data)  //closing the channel
 
 }
 
