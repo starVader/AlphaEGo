@@ -51,16 +51,17 @@ func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
 	}
 }
 
-func filtering(search chan *elastic.SearchResult) {
+func filtering(search chan *elastic.SearchResult)  {
 	var t Tweet
 	var data chan Tweet = make(chan Tweet)
-	fmt.Println("csv writer started")
+	var filter string 
+	//fmt.Println("csv writer started")
 	writer, err := getwriter()
 	if err != nil {
 		panic(err)
 	}
 	go t.csvWriter(writer, data)  // spawning the csvwriter routine
-	fmt.Println("filtering started")
+	//fmt.Println("filtering started")
 	for i := range search {
 		searchResult := i
 		for _, hit := range searchResult.Hits.Hits {
@@ -68,8 +69,12 @@ func filtering(search chan *elastic.SearchResult) {
 			if err != nil {
 				fmt.Println("failed", err)
 			}
-			//converting the first letter to upper for matching to the result
-			filter := strings.Replace(q.search_string,q.search_string[:1], strings.ToUpper(q.search_string[:1]),1)
+			//converting the first letter to upper for matching to the result(only if searchresults are starting with capital latters)
+			if t.User[:1] == strings.ToLower(q.search_string[:1]) {
+				filter = q.search_string 
+			} else { 
+				filter = strings.Replace(q.search_string,q.search_string[:1], strings.ToUpper(q.search_string[:1]),1)
+			}
 			if t.User == filter {
 				data <- t // channeling data to csv writer
 			}
@@ -97,14 +102,12 @@ func getReport(client *elastic.Client) {
 	}
 	pages := 0
 	scroll_indexId := searchResult.ScrollId
-	data := make(chan Tweet)
 	for {
 		searchResult, err := client.Scroll().
 			Size(1).
 			ScrollId(scroll_indexId).
 			Do()
 		if err != nil {
-			fmt.Println(err)
 			break
 		}
 		result <- searchResult // sending data into channel received by filtering function
@@ -118,7 +121,7 @@ func getReport(client *elastic.Client) {
 	if pages <= 0 {
 		fmt.Println(pages, "Records found")
 	}
-	close(data)  //closing the channel
+	close(result)  //closing the channel
 
 }
 
