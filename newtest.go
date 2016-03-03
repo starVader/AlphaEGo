@@ -7,7 +7,8 @@ import (
 	"gopkg.in/olivere/elastic.v3"
 	"os"
 	"sync"
-	//"strings"
+	"reflect"
+	"strings"
 )
 
 type Tweet struct {
@@ -55,6 +56,14 @@ func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
 	}
 }
 
+//Now Generic lookup is possible thanks to this function
+func getField(v *Tweet, field string) string {
+    r := reflect.ValueOf(v)
+    f := reflect.Indirect(r).FieldByName(field)
+   // fmt.Println(string(f.String()))
+    return string(f.String())
+}
+
 func filtering(search chan *elastic.SearchResult)  {
 	var t Tweet
 	var data chan Tweet = make(chan Tweet)
@@ -73,9 +82,12 @@ func filtering(search chan *elastic.SearchResult)  {
 			if err != nil {
 				fmt.Println("failed", err)
 			}
-			//fmt.Println(t)
-			//Filtering goes her
-			if t.User == q.filter[0].Qvalue {
+			//Filtering goes her 
+			//val := reflect.ValueOf(q.filter[0].Qkey)
+
+			//fmt.Println(getField(&t, q.filter[0].Qkey))
+			q.filter[0].Qkey = strings.Replace(q.filter[0].Qkey,q.filter[0].Qkey[:1], strings.ToUpper(q.filter[0].Qkey[:1]),1)
+			if getField(&t, q.filter[0].Qkey) == q.filter[0].Qvalue {
 				fmt.Println(t)
 				data <- t
 			}
