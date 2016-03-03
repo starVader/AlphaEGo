@@ -2,6 +2,8 @@ package newtest
 
 
 import "testing"
+import "fmt"
+import "gopkg.in/olivere/elastic.v3"
 
 
 const checkMark =  "\u2713"
@@ -47,17 +49,35 @@ func TestFunction(t *testing.T) {
 
 		}
 	}
-	t.Log("getReport function should get the report from elasticsearch")
+	t.Log("testing function getReport and filtering")
 	{
 		t.Logf("cheking getreport")
 		{
-			q = Query{search_string: "arpit", search_field: "user"}
 			client, err := getClient()
+			if err != nil {
+				t.Logf("\tError getting client", ballotX)
+			}
+			q = Query{search_string: "arpit", search_field: "user"}
+			getReport(client)
+			t.Log("\tGot report successfully", checkMark)
+			k := make(chan *elastic.SearchResult)
+			go filtering(k)
+			searchResult, err := client.Scroll().Size(1).Do()
+			if err != nil {
+				t.Log(err)
+			}
+			scroll_indexId := searchResult.ScrollId
+			for {
+				searchResult, err := client.Scroll().
+				Size(1).
+				ScrollId(scroll_indexId).
+				Do()
 				if err != nil {
-					t.Logf("\tError getting client", ballotX)
+					break
 				}
-				getReport(client)
-				t.Log("\tGot report successfully", checkMark)
+				k <- searchResult
+			}
+			
 		}
 	}
 }
@@ -65,7 +85,7 @@ func TestFunction(t *testing.T) {
 
 //Benchmark getclient  function
 func BenchmarkGetclient(b *testing.B) {
-     b.ResetTimer()
+     //b.ResetTimer()
      for i := 0; i < b.N; i++ {
          getClient()
      }
@@ -73,10 +93,20 @@ func BenchmarkGetclient(b *testing.B) {
 
 //Benchmark getwriter function
 func BenchmarkGetcsv(b *testing.B) {
-     b.ResetTimer()
+     //b.ResetTimer()
      for i := 0; i < b.N; i++ {
          getwriter()
      }
 }
 
+func BenchmarkGetreport(b *testing.B) {
+     //b.ResetTimer()
+     for i := 0; i < b.N; i++ {
+     	client, err := getClient()
+		if err != nil {
+			fmt.Println("\tError getting client", ballotX)
+		}
+        getReport(client)
+     }
+}
 
