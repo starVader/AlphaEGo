@@ -7,7 +7,7 @@ import (
 	"gopkg.in/olivere/elastic.v3"
 	"os"
 	"sync"
-	"strings"
+	//"strings"
 )
 
 type Tweet struct {
@@ -20,9 +20,13 @@ type output interface {
 	csvWriter()
 }
 
-type Query struct {
-	search_string string
-	search_field  string
+type Filter struct {
+	filter []Fpair
+}
+
+type Fpair struct {
+	Qkey  string
+	Qvalue string
 }
 
 func getClient() (*elastic.Client, error) {
@@ -40,7 +44,7 @@ func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
     var mutex = &sync.Mutex{}
 	for i := range m {
         c = i
-		fmt.Println(c)
+		//fmt.Println(c)
 		data := []string{c.User, c.Post_date, c.Message}
 		//Introduced locks for write to csv file
 		mutex.Lock() 
@@ -54,7 +58,7 @@ func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
 func filtering(search chan *elastic.SearchResult)  {
 	var t Tweet
 	var data chan Tweet = make(chan Tweet)
-	var filter string 
+	//var filter string 
 	//fmt.Println("csv writer started")
 	writer, err := getwriter()
 	if err != nil {
@@ -69,14 +73,11 @@ func filtering(search chan *elastic.SearchResult)  {
 			if err != nil {
 				fmt.Println("failed", err)
 			}
-			//converting the first letter to upper for matching to the result(only if searchresults are starting with capital latters)
-			if t.User[:1] == strings.ToLower(q.search_string[:1]) {
-				filter = q.search_string 
-			} else { 
-				filter = strings.Replace(q.search_string,q.search_string[:1], strings.ToUpper(q.search_string[:1]),1)
-			}
-			if t.User == filter {
-				data <- t // channeling data to csv writer
+			//fmt.Println(t)
+			//Filtering goes her
+			if t.User == q.filter[0].Qvalue {
+				fmt.Println(t)
+				data <- t
 			}
 		}
 	}
@@ -88,7 +89,8 @@ func getReport(client *elastic.Client) {
 	// spawinng the filtering routine
 	go filtering(result) 
 	// the termquery uses all lower but for matching to filter exactly we have to convert the first letter to upper
-	termQuery := elastic.NewTermQuery(q.search_field, q.search_string)
+	boolq := elastic.NewBoolQuery()
+	termQuery := boolq.Filter(elastic.NewTermQuery(q.filter[0].Qkey, q.filter[0].Qvalue))
 	count, err := client.Count().
 		Query(termQuery).
 		Do()
@@ -96,14 +98,15 @@ func getReport(client *elastic.Client) {
 		fmt.Println(err)
 	}
 	fmt.Println("Count", count)
-	searchResult, err := client.Scroll().Size(1).Do()
+	scrollService := elastic.NewScrollService(client)
+	searchResult, err := scrollService.Scroll("5m").Size(1).Do()
 	if err != nil {
 		panic(err)
 	}
 	pages := 0
 	scroll_indexId := searchResult.ScrollId
 	for {
-		searchResult, err := client.Scroll().
+		searchResult, err := scrollService.Query(termQuery).Scroll("5m").
 			Size(1).
 			ScrollId(scroll_indexId).
 			Do()
@@ -125,17 +128,21 @@ func getReport(client *elastic.Client) {
 
 }
 
-var q Query // Global because it has to be used at different routines
+var q Filter // Global because it has to be used at different routines
 func main() {
+	var k Fpair
 	client, err := getClient()
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
 	}
-	fmt.Println("Successfully got the client:", client)
 	fmt.Println("Enter the search Field")
-	fmt.Scan(&q.search_field)
+	fmt.Scan(&k.Qkey)
+
 	fmt.Println("Enter the search string")
-	fmt.Scan(&q.search_string)
+	fmt.Scan(&k.Qvalue)
+
+	q = Filter {filter :[]Fpair{k}}
+	fmt.Println(q.filter[0])
 	getReport(client)
 }
