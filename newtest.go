@@ -122,7 +122,7 @@ func Filtering(search chan *elastic.SearchResult)  {
 }
 
 //Scrolls elasticsearch like cursors in SQL
-func GetReport(client *elastic.Client) {
+func GetReportEL(client *elastic.Client) {
 	result := make(chan *elastic.SearchResult)
 	// spawinng the Filtering routine
 	go Filtering(result) 
@@ -193,9 +193,8 @@ func main() {
 	switch v := client.(type) {
 		case *elastic.Client:
 			fmt.Println("Calling With Elasticsearch Client")
-			GetReport(v)
+			GetReportEL(v)
 		default:
 			fmt.Println("No such Client available",v )
 	}
 }
-
