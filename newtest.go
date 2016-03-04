@@ -1,4 +1,4 @@
-package main 
+package main
 
 import (
 	"encoding/csv"
@@ -11,16 +11,24 @@ import (
 	"strings"
 )
 
+//Sample output struct
 type Tweet struct {
 	User      string
 	Post_date string
 	Message   string
 }
 
-type output interface {
-	csvWriter()
+//csvWriter interface
+type OUTPUT interface {
+	CsvWriter()
 }
 
+//Database Interface gets client according to database
+type GETCLIENT interface{
+	GetClient()
+}
+
+//filter struct
 type Filter struct {
 	filter []Fpair
 }
@@ -30,18 +38,44 @@ type Fpair struct {
 	Qvalue string
 }
 
-func getClient() (*elastic.Client, error) {
-	client, err := elastic.NewClient()
-	return client, err
+//types of database structs
+type DatabaseType int
+
+//kind enumeration
+const (
+	Elasticsearch  DatabaseType = 1 + iota
+	Dynamo
+	Mysql
+)
+
+
+var database = [...]string {
+	"Elasticsearch",
+	"Dynamo",
+	"Mysql",
 }
 
-func getwriter() (*csv.Writer, error) {
+
+func (db DatabaseType) String() string {
+	return database[db -1]
+}
+
+func (typedb DatabaseType) GetClient() (interface{}, error) {
+	if typedb == Elasticsearch{
+		client, err := elastic.NewClient()
+		return client, err
+	}
+	fmt.Println("No such Database", typedb)
+	return nil,nil
+}
+
+func GetWriter() (*csv.Writer, error) {
 	file, err := os.Create("result.csv")
 	writer := csv.NewWriter(file)
 	return writer, err
 }
 
-func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
+func (c Tweet) CsvWriter(writer *csv.Writer, m chan Tweet) {
     var mutex = &sync.Mutex{}
 	for i := range m {
         c = i
@@ -57,37 +91,28 @@ func (c Tweet) csvWriter(writer *csv.Writer, m chan Tweet) {
 }
 
 //Now Generic lookup is possible thanks to this function
-func getField(v *Tweet, field string) string {
+func GetField(v *Tweet, field string) string {
     r := reflect.ValueOf(v)
     f := reflect.Indirect(r).FieldByName(field)
    // fmt.Println(string(f.String()))
     return string(f.String())
 }
 
-func filtering(search chan *elastic.SearchResult)  {
+//gets the searchresult and filters them for writing to csv 
+func Filtering(search chan *elastic.SearchResult)  {
 	var t Tweet
 	var data chan Tweet = make(chan Tweet)
-	//var filter string 
-	//fmt.Println("csv writer started")
-	writer, err := getwriter()
-	if err != nil {
-		panic(err)
-	}
-	go t.csvWriter(writer, data)  // spawning the csvwriter routine
-	//fmt.Println("filtering started")
+	writer, err := GetWriter()
+	CheckError(err)
+	go t.CsvWriter(writer, data)  // spawning the csvwriter routine
 	for i := range search {
 		searchResult := i
 		for _, hit := range searchResult.Hits.Hits {
 	        err := json.Unmarshal(*hit.Source, &t)
-			if err != nil {
-				fmt.Println("failed", err)
-			}
-			//Filtering goes her 
-			//val := reflect.ValueOf(q.filter[0].Qkey)
-
-			//fmt.Println(getField(&t, q.filter[0].Qkey))
+			CheckError(err)
+			//Filtering data
 			q.filter[0].Qkey = strings.Replace(q.filter[0].Qkey,q.filter[0].Qkey[:1], strings.ToUpper(q.filter[0].Qkey[:1]),1)
-			if getField(&t, q.filter[0].Qkey) == q.filter[0].Qvalue {
+			if GetField(&t, q.filter[0].Qkey) == q.filter[0].Qvalue {
 				fmt.Println(t)
 				data <- t
 			}
@@ -96,25 +121,23 @@ func filtering(search chan *elastic.SearchResult)  {
 	close(data) // closing the channel
 }
 
-func getReport(client *elastic.Client) {
+//Scrolls elasticsearch like cursors in SQL
+func GetReport(client *elastic.Client) {
 	result := make(chan *elastic.SearchResult)
-	// spawinng the filtering routine
-	go filtering(result) 
+	// spawinng the Filtering routine
+	go Filtering(result) 
 	// the termquery uses all lower but for matching to filter exactly we have to convert the first letter to upper
 	boolq := elastic.NewBoolQuery()
 	termQuery := boolq.Filter(elastic.NewTermQuery(q.filter[0].Qkey, q.filter[0].Qvalue))
 	count, err := client.Count().
 		Query(termQuery).
 		Do()
-	if err != nil {
-		fmt.Println(err)
-	}
+	CheckError(err)
+	//Gives count of total records found
 	fmt.Println("Count", count)
 	scrollService := elastic.NewScrollService(client)
 	searchResult, err := scrollService.Scroll("5m").Size(1).Do()
-	if err != nil {
-		panic(err)
-	}
+	CheckError(err)
 	pages := 0
 	scroll_indexId := searchResult.ScrollId
 	for {
@@ -125,7 +148,7 @@ func getReport(client *elastic.Client) {
 		if err != nil {
 			break
 		}
-		result <- searchResult // sending data into channel received by filtering function
+		result <- searchResult // sending data into channel received by Filtering function
 		pages += 1
 		scroll_indexId = searchResult.ScrollId
 		if scroll_indexId == "" {
@@ -140,14 +163,22 @@ func getReport(client *elastic.Client) {
 
 }
 
-var q Filter // Global because it has to be used at different routines
-func main() {
-	var k Fpair
-	client, err := getClient()
+func CheckError(err error) {
 	if err != nil {
 		fmt.Println(err)
 		panic(err)
 	}
+}
+
+var q Filter // Global because it has to be used at different routines
+
+func main() {
+	var k Fpair
+	var str DatabaseType
+	fmt.Println("Select Database :->\n 1. For Elasticsearch\n", "2. For Dynamo\n","3. For Mysql\n", "Enter choice")
+	fmt.Scan(&str)
+	// fmt.Println(str)
+	// fmt.Println(reflect.TypeOf(str))
 	fmt.Println("Enter the search Field")
 	fmt.Scan(&k.Qkey)
 
@@ -156,5 +187,15 @@ func main() {
 
 	q = Filter {filter :[]Fpair{k}}
 	fmt.Println(q.filter[0])
-	getReport(client)
+	client, err := str.GetClient()
+	CheckError(err)
+	//type assertion for getclient 
+	switch v := client.(type) {
+		case *elastic.Client:
+			fmt.Println("Calling With Elasticsearch Client")
+			GetReport(v)
+		default:
+			fmt.Println("No such Client available",v )
+	}
 }
+
