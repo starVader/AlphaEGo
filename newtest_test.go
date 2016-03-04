@@ -8,86 +8,116 @@ import "gopkg.in/olivere/elastic.v3"
 
 const checkMark =  "\u2713"
 const ballotX = "\u2717"
-var tr Tweet = Tweet{User:"rakesh",Post_date:"2011-998-990",Message:"hello world"}
+var tr Tweet = Tweet{User:"arpit",Post_date:"2011-998-990",Message:"hello world"}
 var data chan Tweet = make(chan Tweet)  
+var k Fpair
+var str DatabaseType
 
+func TestCheckError(t *testing.T) {
+	t.Log("Checking the error check function")
+	{
+		var err error
+		err = nil
+		CheckError(err)
+		t.Logf("Error check successfull",checkMark)  
+	}
+}
 
-func TestFunction(t *testing.T) {
+func TestGetWriter(t *testing.T) {
 	t.Log("Given the need to return a csv writer")
 	{
 		t.Logf("checking for function(getWriter) return")
 		{
-			_,err := getwriter()
+			_,err := GetWriter()
 			if err != nil  {
 				t.Fatal("\t Should have been a *csv.Writer",ballotX)
 			}
+			fmt.Println("boss")
 			t.Log("\tGot the Csv Writer", checkMark)
 		}
 	}
+}
+func TestGetClient(t *testing.T) {
 	t.Log("Given the need for elastic client")
 	{
 		t.Logf("checking return of function getClient")
 		{
-			_,err := getClient()
+			str = Elasticsearch
+			_,err := str.GetClient()
 			if err != nil {
 				t.Fatal("\tShould have been a elastic search client",ballotX)
 			}
 			t.Log("\tGot the elastic search client",checkMark)
 		}
 	}
+}
+
+func TestCsvWriter(t *testing.T) {
 	t.Log("function csvWriter should  to file") 
 	{
 		t.Logf("checking function for return") 
 		{
-			k,err := getwriter()
+			k,err := GetWriter()
 			if err != nil {
-				t.Fatal("\t should have been a csvwriter", ballotX)
+			t.Fatal("\t should have been a csvwriter", ballotX)
 			}
-			go tr.csvWriter(k,data)
+			go tr.CsvWriter(k,data)
 			data <- tr
 			t.Log("\t data successfully written to csv", checkMark)
 
 		}
 	}
-	t.Log("testing function getReport and filtering")
+}
+
+func TestGetField(t *testing.T) {
+	t.Log("Function Getfield gets the field of struct")
 	{
-		t.Logf("cheking getreport")
+		t.Logf("Checking function for return")
 		{
-			client, err := getClient()
-			if err != nil {
-				t.Logf("\tError getting client", ballotX)
+			k.Qkey = "User"
+			k.Qvalue = "arpit"
+			q = Filter {filter :[]Fpair{k}}
+			str := GetField(&tr, q.filter[0].Qkey)
+			fmt.Println(str)
+			if str != "arpit" {
+				t.Fatal("\t Could have got the struct field",ballotX)
 			}
-			q = Query{search_string: "arpit", search_field: "user"}
-			getReport(client)
-			t.Log("\tGot report successfully", checkMark)
-			k := make(chan *elastic.SearchResult)
-			go filtering(k)
-			searchResult, err := client.Scroll().Size(1).Do()
-			if err != nil {
-				t.Log(err)
-			}
-			scroll_indexId := searchResult.ScrollId
-			for {
-				searchResult, err := client.Scroll().
-				Size(1).
-				ScrollId(scroll_indexId).
-				Do()
-				if err != nil {
-					break
-				}
-				k <- searchResult
-			}
-			
+			t.Log("\t Field successfully got",checkMark)
 		}
 	}
 }
 
+func TestGetReport(t *testing.T) {
+	t.Log("Function GetReport gets the report")
+	{
+		t.Logf("Checking function")
+		{
+			k.Qkey = "User"
+			k.Qvalue = "arpit"
+			q = Filter {filter :[]Fpair{k}}
+			str = Elasticsearch
+			client ,err := str.GetClient()
+			if err != nil {
+				t.Fatal("\tShould have been a elastic search client GetReport",ballotX)
+			}
+			t.Log("\tGot the elastic search client GetReport",checkMark)
+			switch v := client.(type) {
+				case *elastic.Client:
+				fmt.Println("Calling With Elasticsearch Client")
+				GetReport(v)
+			default:
+				fmt.Println("No such Client available",v )
+			}
+		}
+	}
+}
 
 //Benchmark getclient  function
 func BenchmarkGetclient(b *testing.B) {
      //b.ResetTimer()
+	 str = Elasticsearch
      for i := 0; i < b.N; i++ {
-         getClient()
+         str.GetClient()
      }
 }
 
@@ -95,18 +125,35 @@ func BenchmarkGetclient(b *testing.B) {
 func BenchmarkGetcsv(b *testing.B) {
      //b.ResetTimer()
      for i := 0; i < b.N; i++ {
-         getwriter()
+         GetWriter()
      }
 }
 
 func BenchmarkGetreport(b *testing.B) {
      //b.ResetTimer()
-     for i := 0; i < b.N; i++ {
-     	client, err := getClient()
+	k.Qkey = "user"
+	k.Qvalue = "arpit"
+	q = Filter {filter :[]Fpair{k}}
+	str = Elasticsearch
+    for i := 0; i < b.N; i++ {
+     	client, err := str.GetClient()
 		if err != nil {
 			fmt.Println("\tError getting client", ballotX)
 		}
-        getReport(client)
+        switch v := client.(type) {
+		case *elastic.Client:
+			fmt.Println("Calling With Elasticsearch Client")
+			GetReport(v)
+		default:
+			fmt.Println("No such Client available",v )
+		}
      }
 }
 
+func BenchmarkCheckError(b *testing.B) {
+	var err error
+	err = nil 
+	for i := 0; i < b.N; i++ {
+		CheckError(err)
+	}
+}
