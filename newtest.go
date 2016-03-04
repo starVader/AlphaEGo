@@ -41,14 +41,14 @@ type Fpair struct {
 //types of database structs
 type DatabaseType int
 
-//kind enumeration
+//Constants of type DatabaseType
 const (
-	Elasticsearch  DatabaseType = 1 + iota
+	Elasticsearch  DatabaseType = 1 + iota //Provide int values to each of constants
 	Dynamo
 	Mysql
 )
 
-
+//Enums should be able to print as strings, so we declare slice of strings
 var database = [...]string {
 	"Elasticsearch",
 	"Dynamo",
