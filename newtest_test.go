@@ -104,7 +104,7 @@ func TestGetReport(t *testing.T) {
 			switch v := client.(type) {
 				case *elastic.Client:
 				fmt.Println("Calling With Elasticsearch Client")
-				GetReport(v)
+				GetReportEL(v)
 			default:
 				fmt.Println("No such Client available",v )
 			}
@@ -143,7 +143,7 @@ func BenchmarkGetreport(b *testing.B) {
         switch v := client.(type) {
 		case *elastic.Client:
 			fmt.Println("Calling With Elasticsearch Client")
-			GetReport(v)
+			GetReportEL(v)
 		default:
 			fmt.Println("No such Client available",v )
 		}
