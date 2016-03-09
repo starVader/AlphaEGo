@@ -19,12 +19,12 @@ type Tweet struct {
 }
 
 //csvWriter interface
-type OUTPUT interface {
+type Output interface {
 	CsvWriter()
 }
 
 //Database Interface gets client according to database
-type GETCLIENT interface {
+type GetClient interface {
 	GetClient()
 }
 
@@ -55,6 +55,7 @@ var database = [...]string{
 	"Mysql",
 }
 
+//To control the default format for custom database type
 func (db DatabaseType) String() string {
 	return database[db-1]
 }
